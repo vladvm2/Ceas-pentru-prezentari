@@ -16,8 +16,6 @@ GPIO_TypeDef* segmentPorts[8] = {A_GPIO_Port, B_GPIO_Port, C_GPIO_Port, D_GPIO_P
 uint16_t segmentPins[8]       = {A_Pin, B_Pin, C_Pin, D_Pin, E_Pin, F_Pin, G_Pin, DP_Pin};
 
 
-
-
 // Segment patterns for digits 0-9 (1=ON)
 int segmentMap[11][8] = {
 		{1,1,1,1,1,1,0,0}, //0
@@ -74,65 +72,68 @@ void UpdateDisplayFromTime(void)
 
 void StartDefaultTask(void const * argument)
 {
-	for(;;)
-	{
-		osDelay(1);
-	}
+    uint32_t lastSampledTime = HAL_GetTick();
+
+    for(;;)
+    {
+        uint32_t now = HAL_GetTick();
+
+        switch(startFlag) {
+        case 0: // idle
+            break;
+
+        case 1: // start or resume
+            startTime       = now;          // remember momentul preluării
+            lastRunTime     = now;          // for UART pacing in Task01
+            lastSampledTime = now;          // for delta accumulation
+            startFlag       = 2;            // transition to running
+            break;
+
+        case 2: // running
+            totalTime += (now - lastSampledTime);
+            lastSampledTime = now;
+            break;
+
+        case 3: // stop
+            elapsedTime += now - startTime;
+            totalTime    = elapsedTime;
+            startFlag    = 0; // pause
+            break;
+
+        case 4: // reset
+            elapsedTime = 0;
+            totalTime   = 0;
+            startFlag   = 0;
+            break;
+        }
+
+        osDelay(1);
+    }
 }
 
 void StartTask01(void const * argument)
 {
-	for(;;)
-	{
-		if (startFlag == 1)  // Start primit sau reluare
-		{
-			startTime = HAL_GetTick(); // momentul reluării
-			lastRunTime = startTime;
-			startFlag = 2; // semnal că timerul rulează
-		}
-		else if (startFlag == 2)  // Timerul rulează
-		{
-			uint32_t currentTime = HAL_GetTick();
-			if ((currentTime - lastRunTime) >= 500) // au trecut 500 ms
-			{
-				lastRunTime = currentTime;
+    for(;;)
+    {
+        if (startFlag == 2)  // running
+        {
+            uint32_t currentTime = HAL_GetTick();
+            if ((currentTime - lastRunTime) >= 500) // au trecut 500 ms
+            {
+                lastRunTime = currentTime;
 
-				// Calculăm timpul total până acum
-				totalTime = elapsedTime + (currentTime - startTime);
+                char buffer[50];
+                int len = sprintf(buffer, "Timp: %lu ms\r\n", totalTime);
+                HAL_UART_Transmit(&huart2, (uint8_t*)buffer, len, HAL_MAX_DELAY);
+            }
+        }
+        else if (startFlag == 0)  // paused -> show final total
+        {
+            // optional: transmit once if needed
+        }
 
-				// Trimitem timpul prin UART
-				char buffer[50];
-				int len = sprintf(buffer, "Timp: %lu ms\r\n", totalTime);
-				HAL_UART_Transmit(&huart2, (uint8_t*)buffer, len, HAL_MAX_DELAY);
-
-				// HAL_GPIO_TogglePin(GPIOA, LED_GREEN_Pin); // optional
-			}
-		}
-		else if (startFlag == 3)  // Stop primit
-		{
-			// Acumulăm timpul până la oprire
-			elapsedTime += HAL_GetTick() - startTime;
-			startFlag = 0; // pauză
-
-			// Trimitem timpul total acumulat
-			char buffer[50];
-			int len = sprintf(buffer, "Timp total: %lu ms\r\n", elapsedTime);
-			HAL_UART_Transmit(&huart2, (uint8_t*)buffer, len, HAL_MAX_DELAY);
-
-			UpdateDisplayFromTime();
-			Display_Update();
-		}
-		else if (startFlag == 4)  // Reset primit
-		{
-			elapsedTime = 0;
-			startFlag = 0; // reset complet
-
-			UpdateDisplayFromTime();
-			Display_Update();
-		}
-
-		osDelay(1);
-	}
+        osDelay(1);
+    }
 }
 
 void StartTask02(void const * argument)
@@ -162,7 +163,7 @@ void StartTask02(void const * argument)
 		    lastTimeDisplayed = HAL_GetTick();
 		    Display_Update();
 		}
-		osDelay(10);
+		//osDelay(1);
 	}
 
 }
