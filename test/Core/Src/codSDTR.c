@@ -12,9 +12,8 @@ uint16_t digitPins[4]       = {Dig1_Pin, Dig2_Pin, Dig3_Pin, Dig4_Pin};
 
 // SEGMENT ports and pins (A,B,C,D,E,F,G,DP)
 GPIO_TypeDef* segmentPorts[8] = {A_GPIO_Port, B_GPIO_Port, C_GPIO_Port, D_GPIO_Port,
-                                 E_GPIO_Port, F_GPIO_Port, G_GPIO_Port, DP_GPIO_Port};
-uint16_t segmentPins[8]       = {A_Pin, B_Pin, C_Pin, D_Pin,
-                                 E_Pin, F_Pin, G_Pin, DP_Pin};
+		E_GPIO_Port, F_GPIO_Port, G_GPIO_Port, DP_GPIO_Port};
+uint16_t segmentPins[8]       = {A_Pin, B_Pin, C_Pin, D_Pin, E_Pin, F_Pin, G_Pin, DP_Pin};
 
 
 
@@ -35,71 +34,43 @@ int segmentMap[11][8] = {
 };
 
 int digits[4] = {0,0,0,0};
-int currentDigit = 6;
+int currentDigit = 0;
 // global variable to track debug mode
 uint32_t debugTimestamp = 0;
 uint8_t debugActive = 0;
 
+void Display_Update(void) {
+    for (int digit = 0; digit < 4; digit++) {
+        // Turn off all digits
+        for (int i = 0; i < 4; i++)
+            HAL_GPIO_WritePin(digitPorts[i], digitPins[i], GPIO_PIN_RESET);
 
+        // Set segments for current digit
+        for (int seg = 0; seg < 8; seg++) {
+            HAL_GPIO_WritePin(segmentPorts[seg], segmentPins[seg],
+                segmentMap[digits[digit]][seg] ? GPIO_PIN_SET : GPIO_PIN_RESET);
+        }
 
-// Call this in StartTask01 every 250ms
-/*
-void Display_Update(void)
-{
-
-	// Turn off all digits
-	for(int i=0; i<4; i++)
-		HAL_GPIO_WritePin(digitPorts[i], digitPins[i], GPIO_PIN_RESET);
-
-	// Set segments for current digit
-	for(int i=0;i<8;i++)
-	{
-		HAL_GPIO_WritePin(segmentPorts[i], segmentPins[i],
-				segmentMap[digits[currentDigit]][i] ? GPIO_PIN_SET : GPIO_PIN_RESET);
-	}
-
-	// Enable current digit
-	HAL_GPIO_WritePin(digitPorts[currentDigit], digitPins[currentDigit], GPIO_PIN_SET);
-
-	// Next digit
-	currentDigit = (currentDigit + 1) % 4;
-}*/
-
-void Display_Update(void)
-{
-    for(int i=0; i<4; i++)
-        HAL_GPIO_WritePin(digitPorts[i], digitPins[i], GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(digitPorts[currentDigit], digitPins[currentDigit], GPIO_PIN_SET);
-
-
-    for(int i=0; i<8; i++)
-    {
-        HAL_GPIO_WritePin(segmentPorts[i], segmentPins[i],
-        		segmentMap[digits[currentDigit]][i] ? GPIO_PIN_SET : GPIO_PIN_RESET);
+        // Enable current digit
+        HAL_GPIO_WritePin(digitPorts[digit], digitPins[digit], GPIO_PIN_SET);
+        osDelay(2);  // Display each digit for 2ms
+        HAL_GPIO_WritePin(digitPorts[digit], digitPins[digit], GPIO_PIN_RESET);
     }
-
-    // Small delay for visibility
-    osDelay(1);  // 2 ms is usually enough
-
-    // Move to the next digit
-    currentDigit = (currentDigit + 1) % 4;
 }
 
-
-void UpdateDisplayFromTime(uint32_t elapsedTime)
+void UpdateDisplayFromTime(void)
 {
-	// elapsedTime is in ms → convert to total seconds
-	uint32_t totalSeconds = elapsedTime / 1000;
-
+	uint32_t totalSeconds = totalTime / 1000;
 	uint32_t minutes = totalSeconds / 60;
 	uint32_t seconds = totalSeconds % 60;
 
-	// Fill digits for MM:SS
-	digits[0] = (minutes / 10) % 10; // tens of minutes
-	digits[1] = minutes % 10;        // ones of minutes
-	digits[2] = (seconds / 10) % 10; // tens of seconds
-	digits[3] = seconds % 10;        // ones of seconds
+	// MM:SS
+	digits[0] = (minutes / 10) % 10;
+	digits[1] =  minutes % 10;
+	digits[2] = (seconds / 10) % 10;
+	digits[3] =  seconds % 10;
 }
+
 
 void StartDefaultTask(void const * argument)
 {
@@ -119,8 +90,7 @@ void StartTask01(void const * argument)
 			lastRunTime = startTime;
 			startFlag = 2; // semnal că timerul rulează
 		}
-
-		if (startFlag == 2)  // Timerul rulează
+		else if (startFlag == 2)  // Timerul rulează
 		{
 			uint32_t currentTime = HAL_GetTick();
 			if ((currentTime - lastRunTime) >= 500) // au trecut 500 ms
@@ -148,11 +118,17 @@ void StartTask01(void const * argument)
 			char buffer[50];
 			int len = sprintf(buffer, "Timp total: %lu ms\r\n", elapsedTime);
 			HAL_UART_Transmit(&huart2, (uint8_t*)buffer, len, HAL_MAX_DELAY);
+
+			UpdateDisplayFromTime();
+			Display_Update();
 		}
 		else if (startFlag == 4)  // Reset primit
 		{
 			elapsedTime = 0;
 			startFlag = 0; // reset complet
+
+			UpdateDisplayFromTime();
+			Display_Update();
 		}
 
 		osDelay(1);
@@ -166,20 +142,27 @@ void StartTask02(void const * argument)
 
 	for (;;)
 	{
-	    uint32_t now = HAL_GetTick();
+		uint32_t now = HAL_GetTick();
 
-	    // Check if debug mode is active and less than 2 sec has passed
-	    if(debugActive && (now - debugTimestamp < 2000))
-	    {
-	        // Do not update time, just refresh the debug display
-	        Display_Update();
-	    }
-	    else
-	    {
-	        debugActive = 0;               // disable debug mode after 2 sec
-	        UpdateDisplayFromTime(totalTime); // normal time update
-	        Display_Update();
-	    }
+		if(debugActive)
+		{
+		    if(now - debugTimestamp < 2000)
+		    {
+		        // Keep showing debug values
+		        Display_Update();
+		    }
+		    else
+		    {
+		        debugActive = 0; // Debug mode expired
+		    }
+		}
+		else if(now - lastTimeDisplayed > 100)
+		{
+		    UpdateDisplayFromTime();
+		    lastTimeDisplayed = HAL_GetTick();
+		    Display_Update();
+		}
+		osDelay(10);
 	}
 
 }
@@ -209,19 +192,18 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 		}
 		else if (rxData == 'Z') // Debug: afișăm cifra 1
 		{
-		    digits[0] = 10;
-		    digits[1] = 10;
-		    digits[2] = 10;
-		    digits[3] = 10;
+			startFlag = 0;
+			digits[0] = 1;
+			digits[1] = 2;
+			digits[2] = 3;
+			digits[3] = 4;
 
-		    debugActive = 1;                 // enable debug
-		    debugTimestamp = HAL_GetTick();  // store the current time
+			debugActive = 1;                 // enable debug
+			debugTimestamp = HAL_GetTick();  // store the current time
 
-		    char dbgMsg[] = "DEBUG: \r\n";
-		    HAL_UART_Transmit(&huart2, (uint8_t*)dbgMsg, strlen(dbgMsg), HAL_MAX_DELAY);
+			char dbgMsg[] = "DEBUG: \r\n";
+			HAL_UART_Transmit(&huart2, (uint8_t*)dbgMsg, strlen(dbgMsg), HAL_MAX_DELAY);
 		}
-
-
 		// Re-armăm recepția
 		HAL_UART_Receive_IT(&huart2, &rxData, 1);
 	}

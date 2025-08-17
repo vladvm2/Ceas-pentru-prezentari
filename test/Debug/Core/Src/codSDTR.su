@@ -1,0 +1,6 @@
+../Core/Src/codSDTR.c:42:6:Display_Update	32	static
+../Core/Src/codSDTR.c:61:6:UpdateDisplayFromTime	24	static
+../Core/Src/codSDTR.c:75:6:StartDefaultTask	16	static
+../Core/Src/codSDTR.c:83:6:StartTask01	88	static
+../Core/Src/codSDTR.c:138:6:StartTask02	24	static
+../Core/Src/codSDTR.c:171:6:HAL_UART_RxCpltCallback	40	static
