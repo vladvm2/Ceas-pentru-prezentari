@@ -11,6 +11,7 @@ volatile uint32_t elapsedTime = 0;
 volatile uint32_t lastRunTime = 0;
 volatile uint32_t totalTime = 0;
 volatile uint32_t lastTimeDisplayed = 0;
+volatile uint8_t sendStatus = 0;
 
 // Variabilă globală de RX (definită în codSDTR.c)
 extern uint8_t rxData;
