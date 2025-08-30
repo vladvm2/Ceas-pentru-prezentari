@@ -1,6 +1,6 @@
-../Core/Src/codSDTR.c:53:6:Display_Update	6
-../Core/Src/codSDTR.c:78:6:UpdateDisplayFromTime	1
-../Core/Src/codSDTR.c:92:6:StartDefaultTask	1
-../Core/Src/codSDTR.c:100:6:StartTask01	7
-../Core/Src/codSDTR.c:145:6:StartTask02	7
-../Core/Src/codSDTR.c:194:6:HAL_UART_RxCpltCallback	6
+../Core/Src/codSDTR.c:28:6:Display_Update	6
+../Core/Src/codSDTR.c:54:6:UpdateDisplayFromTime	1
+../Core/Src/codSDTR.c:68:6:StartDefaultTask	1
+../Core/Src/codSDTR.c:76:6:StartTask01	8
+../Core/Src/codSDTR.c:130:6:StartTask02	4
+../Core/Src/codSDTR.c:172:6:HAL_UART_RxCpltCallback	6

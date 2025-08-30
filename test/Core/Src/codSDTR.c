@@ -1,20 +1,5 @@
 #include "codSDTR.h"
 
-// Definim variabila globală aici
-uint8_t rxData;
-
-// Extern din main.c
-extern UART_HandleTypeDef huart2;
-
-// DIGIT ports and pins
-GPIO_TypeDef* digitPorts[4] = {Dig1_GPIO_Port, Dig2_GPIO_Port, Dig3_GPIO_Port, Dig4_GPIO_Port};
-uint16_t digitPins[4]       = {Dig1_Pin, Dig2_Pin, Dig3_Pin, Dig4_Pin};
-
-// SEGMENT ports and pins (A,B,C,D,E,F,G,DP)
-GPIO_TypeDef* segmentPorts[8] = {A_GPIO_Port, B_GPIO_Port, C_GPIO_Port, D_GPIO_Port,
-		E_GPIO_Port, F_GPIO_Port, G_GPIO_Port, DP_GPIO_Port};
-uint16_t segmentPins[8]       = {A_Pin, B_Pin, C_Pin, D_Pin, E_Pin, F_Pin, G_Pin, DP_Pin};
-
 
 // Segment patterns for digits 0-9 (1=ON)
 int segmentMap[11][8] = {
@@ -31,11 +16,14 @@ int segmentMap[11][8] = {
 		{0,0,0,0,0,0,1,0}  // debbuging
 };
 
+// Numarul afisat pe fiecare segment
 int digits[4] = {0,0,0,0};
+// digitul la care sa ajuns
 int currentDigit = 0;
+
 // global variable to track debug mode
-uint32_t debugTimestamp = 0;
 uint8_t debugActive = 0;
+uint32_t debugTimestamp = 0;
 
 void Display_Update(void) {
 	// Turn off all digits
@@ -58,6 +46,7 @@ void Display_Update(void) {
 
 	// Advance to the next digit for next call
 	currentDigit = (currentDigit + 1) % 4;
+
 }
 
 
@@ -88,8 +77,12 @@ void StartTask01(void const * argument)
 {
 	uint32_t lastSampledTime = HAL_GetTick();
 
+	osSemaphoreDef(semHandle);
+	semHandle = osSemaphoreCreate(osSemaphore(semHandle), 1);
+
 	for(;;)
 	{
+		// now = timpul de la inceputul buclei
 		uint32_t now = HAL_GetTick();
 
 		switch(startFlag) {
@@ -106,6 +99,11 @@ void StartTask01(void const * argument)
 		case 2: // running
 			totalTime += (now - lastSampledTime);
 			lastSampledTime = now;
+
+			if ((now - lastRunTime) >= 500) {
+				lastRunTime = now;
+				osSemaphoreRelease(semHandle);   // release every 500ms
+			}
 			break;
 
 		case 3: // stop
@@ -137,18 +135,19 @@ void StartTask02(void const * argument)
 	for (;;)
 	{
 		uint32_t now = HAL_GetTick();
-
+		/*
 		if ((now - lastRunTime) >= 500 && startFlag == 2) // au trecut 500 ms
 		{
 			lastRunTime = now;
 			sendStatus |= 0b1;
-		}
-		if(sendStatus) {
+		}*/
+		//if(sendStatus) {
+		if (osSemaphoreWait(semHandle, 20) == osOK) {
 			char buffer[50];
 			int len = sprintf(buffer, "Timp: %lu ms\r\n", totalTime);
 			HAL_UART_Transmit(&huart2, (uint8_t*)buffer, len, HAL_MAX_DELAY);
 
-			sendStatus &= ~(0b1);
+			//sendStatus &= ~(0b1);
 		}
 		if(debugActive)
 		{
@@ -162,13 +161,9 @@ void StartTask02(void const * argument)
 				debugActive = 0; // Debug mode expired
 			}
 		}
-		else if(now - lastTimeDisplayed > 20)
-		{
-			UpdateDisplayFromTime();
-			lastTimeDisplayed = HAL_GetTick();
-			Display_Update();
-		}
-		//osDelay(1);
+		UpdateDisplayFromTime();
+		lastTimeDisplayed = HAL_GetTick();
+		Display_Update();
 	}
 
 }
